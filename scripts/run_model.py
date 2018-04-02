@@ -230,15 +230,11 @@ def run_single_example(args, model, dtype, question_raw, feats_var=None):
       os.mkdir(viz_dir)
     args.viz_dir = viz_dir
     print('Saving visualizations to ' + args.viz_dir)
-    norms = {}
+    norms = get_norms(torch.stack(ee.module_outputs, dim=1))
     # Visualize resblock featuremaps
-    for idx, features in enumerate(ee.module_outputs):
-      fmap_norms = (features.squeeze() ** 2).sum(2).sum(1).sqrt()
-      norms[f'residual_{idx}'] = fmap_norms.data.tolist()
-
     data = {
       'question': question_raw,
-      'fmap_norms': norms
+      'fmap_norms': norms.squeeze().data.tolist()
     } 
     import json
     save_file = os.path.join(args.viz_dir, 'norms.json')
@@ -298,6 +294,12 @@ def run_single_example(args, model, dtype, question_raw, feats_var=None):
       if num_inputs == 0:
         break
 
+def get_norms(features):
+    scale = np.prod(features.shape[-2:])
+    fmap_norms = (features ** 2).sum(-1).sum(-1).sqrt() / float(scale)
+    norms = fmap_norms.data.tolist()
+    return norms
+
 
 def run_our_model_batch(args, pg, ee, loader, dtype):
   pg.type(dtype)
@@ -321,6 +323,7 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
 
   q_types = []
   film_params = []
+  film_norms = []
 
   if args.num_last_words_shuffled == -1:
     print('All words of each question shuffled.')
@@ -374,6 +377,7 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
     probs = F.softmax(scores)
 
     _, preds = scores.data.cpu().max(1)
+
     all_programs.append(programs_pred.data.cpu().clone())
     all_scores.append(scores.data.cpu().clone())
     all_probs.append(probs.data.cpu().clone())
@@ -381,6 +385,10 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
     if answers[0] is not None:
       num_correct += (preds == answers).sum()
     num_samples += preds.size(0)
+
+    if args.distill_viz:
+      features = torch.stack(ee.module_outputs, dim=1)
+      film_norms += get_norms(features)
 
   acc = float(num_correct) / num_samples
   print('Got %d / %d = %.2f correct' % (num_correct, num_samples, 100 * acc))
@@ -400,6 +408,11 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
   np.save('film_params', np.vstack(film_params))
   if isinstance(questions, list):
     np.save('q_types', np.vstack(q_types))
+
+  if args.distill_viz:
+    film_norms = np.concatenate([film_norms, film_norms])
+    np.save('film_norms', film_norms)
+
 
   # Save FiLM param stats
   if args.output_program_stats_dir:
