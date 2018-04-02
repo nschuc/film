@@ -410,7 +410,7 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
     np.save('q_types', np.vstack(q_types))
 
   if args.distill_viz:
-    film_norms = np.concatenate([film_norms, film_norms])
+    film_norms = np.concatenate(film_norms)
     np.save('film_norms', film_norms)
 
 
