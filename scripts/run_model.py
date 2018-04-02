@@ -80,6 +80,7 @@ parser.add_argument('--output_h5', default=None)
 parser.add_argument('--output_preds', default=None)
 parser.add_argument('--output_viz_dir', default='img/')
 parser.add_argument('--output_program_stats_dir', default=None)
+parser.add_argument('--distill_viz', default=True, type=int)
 
 grads = {}
 programs = {}  # NOTE: Useful for zero-shot program manipulation when in debug mode
@@ -221,6 +222,30 @@ def run_single_example(args, model, dtype, question_raw, feats_var=None):
   if not interactive:
     print(colored('Question: "%s"' % question_raw, 'cyan'))
   print(colored(str(predicted_answer).capitalize(), 'magenta'))
+
+  # Distill Data Extraction
+  if args.distill_viz:
+    viz_dir = args.output_viz_dir + question_raw + ' ' + predicted_answer
+    if not os.path.isdir(viz_dir):
+      os.mkdir(viz_dir)
+    args.viz_dir = viz_dir
+    print('Saving visualizations to ' + args.viz_dir)
+    norms = {}
+    # Visualize resblock featuremaps
+    for idx, features in enumerate(ee.module_outputs):
+      fmap_norms = (features.squeeze() ** 2).sum(2).sum(1).sqrt()
+      norms[f'residual_{idx}'] = fmap_norms.data.tolist()
+
+    data = {
+      'question': question_raw,
+      'fmap_norms': norms
+    } 
+    import json
+    save_file = os.path.join(args.viz_dir, 'norms.json')
+    with open(save_file, 'w') as outfile:
+      json.dump(data, outfile)
+
+
 
   if interactive:
     return

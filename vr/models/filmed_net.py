@@ -55,6 +55,7 @@ class FiLMedNet(nn.Module):
                debug_every=float('inf'),
                print_verbose_every=float('inf'),
                verbose=True,
+               dtype=torch.FloatTensor
                ):
     super(FiLMedNet, self).__init__()
 
@@ -75,6 +76,7 @@ class FiLMedNet(nn.Module):
     self.use_coords_freq = use_coords
     self.debug_every = debug_every
     self.print_verbose_every = print_verbose_every
+    self.dtype = dtype
 
     # Initialize helper variables
     self.stem_use_coords = (stem_stride == 1) and (self.use_coords_freq > 0)
@@ -94,9 +96,9 @@ class FiLMedNet(nn.Module):
       self.print_verbose_every = 1
     module_H = feature_dim[1] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
     module_W = feature_dim[2] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
-    self.coords = coord_map((module_H, module_W))
-    self.default_weight = Variable(torch.ones(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
-    self.default_bias = Variable(torch.zeros(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
+    self.coords = coord_map((module_H, module_W), dtype=self.dtype)
+    self.default_weight = Variable(torch.ones(1, 1, self.module_dim)).type(self.dtype)
+    self.default_bias = Variable(torch.zeros(1, 1, self.module_dim)).type(self.dtype)
 
     # Initialize stem
     stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
@@ -171,7 +173,7 @@ class FiLMedNet(nn.Module):
 
     # Propagate up the network from low-to-high numbered blocks
     module_inputs = Variable(torch.zeros(feats.size()).unsqueeze(1).expand(
-      N, self.num_modules, self.module_dim, H, W)).type(torch.cuda.FloatTensor)
+      N, self.num_modules, self.module_dim, H, W)).type(self.dtype)
     module_inputs[:,0] = feats
     for fn_num in range(self.num_modules):
       if self.condition_method == 'concat':
@@ -298,14 +300,14 @@ class FiLMedResBlock(nn.Module):
     return out
 
 
-def coord_map(shape, start=-1, end=1):
+def coord_map(shape, start=-1, end=1, dtype=None):
   """
   Gives, a 2d shape tuple, returns two mxn coordinate maps,
   Ranging min-max in the x and y directions, respectively.
   """
   m, n = shape
-  x_coord_row = torch.linspace(start, end, steps=n).type(torch.cuda.FloatTensor)
-  y_coord_row = torch.linspace(start, end, steps=m).type(torch.cuda.FloatTensor)
+  x_coord_row = torch.linspace(start, end, steps=n).type(dtype)
+  y_coord_row = torch.linspace(start, end, steps=m).type(dtype)
   x_coords = x_coord_row.unsqueeze(0).expand(torch.Size((m, n))).unsqueeze(0)
   y_coords = y_coord_row.unsqueeze(1).expand(torch.Size((m, n))).unsqueeze(0)
   return Variable(torch.cat([x_coords, y_coords], 0))
