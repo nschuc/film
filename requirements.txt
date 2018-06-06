@@ -1,0 +1,10 @@
+numpy
+Pillow
+scipy
+torchvision
+h5py
+tqdm
+jupyterlab
+ipdb
+colorterm
+torch
